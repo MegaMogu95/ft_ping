@@ -15,9 +15,7 @@ uint16_t checksum(int count, void* addr)
         sum += * (unsigned char *) addr;
 
     while (sum >> 16)
-	{
         sum = (sum & 0xffff) + (sum >> 16);
-    }
 
 	return (~sum);
 }
