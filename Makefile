@@ -30,7 +30,6 @@ $(PARSING_BIN): $(PARSING_SRCS) $(MAND_INC)/parsing.h
 
 $(NAME): $(OBJS)
 	$(CC) $(CFLAGS) -o $(NAME) $(OBJS) $(LDFLAGS)
-	sudo chmod u+s $(NAME)
 
 obj/%.o: src/%.c | obj
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
