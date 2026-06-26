@@ -3,6 +3,6 @@
 
 # include <netinet/ip_icmp.h>
 
-void	build_icmp_header(struct icmphdr *icmp_hdr, u_int16_t seq);
+void	build_icmp_packet(char packet[56], u_int16_t seq);
 
 #endif

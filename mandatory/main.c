@@ -14,8 +14,8 @@ int main(int argc, char **argv)
     int                 sockfd;
     struct sockaddr_in  addr;
     char                ip[INET_ADDRSTRLEN];
-	struct icmphdr		icmp;
 	u_int16_t			seq;
+	char				packet[64];
 
     parse_options(argc, argv, &opts);
     sockfd = create_socket(DEFAULT_TTL, DEFAULT_TIMEOUT);
@@ -26,6 +26,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 	seq = 0;
-	build_icmp_header(&icmp, seq);
-	write(sockfd, &icmp, sizeof(icmp));
+	build_icmp_packet(packet, seq);
+	printf("PING %s (%s): 56 data bytes\n", opts.target, ip);
+	write(sockfd, packet, 64);
 }
