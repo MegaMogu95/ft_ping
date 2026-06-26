@@ -230,11 +230,16 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 {
 	char	buf[1024];
 	ssize_t	len;
+	int		i;
 
 	setup_signals();
 	setup_timeout(opts->timeout);
-	for (int i = 0; i < opts->preload; i++)
+	i = 0;
+	while (i < opts->preload)
+	{
 		send_packet(sockfd);
+		i++;
+	}
 	send_packet(sockfd);
 	alarm(1);
 	while (g_running)
@@ -242,7 +247,15 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 		if (g_send)
 		{
 			g_send = 0;
-			send_packet(sockfd);
+			/*
+			** Keep sending until we reach the requested count (0 = no
+			** limit). Once all packets are sent, the next alarm tick gives
+			** outstanding replies a one-second grace period, then exits.
+			*/
+			if (opts->count == 0 || g_transmitted < opts->count)
+				send_packet(sockfd);
+			else
+				break ;
 		}
 		len = recv(sockfd, buf, sizeof(buf), 0);
 		if (len < 0)
@@ -253,6 +266,8 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 			break ;
 		}
 		report(buf, len, ip);
+		if (opts->count != 0 && g_received >= opts->count)
+			break ;
 	}
 	print_stats(opts->target);
 }

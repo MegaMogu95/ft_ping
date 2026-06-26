@@ -11,6 +11,7 @@
 **   --help/--usage  -> '?'  (both map to the help screen, like inetutils)
 **   --preload=N     -> 'l'  (send N packets as fast as possible first)
 **   --timeout=N     -> 'w'  (stop after N seconds)
+**   --count=N       -> 'c'  (stop after sending N packets)
 */
 static const struct option g_long_opts[] = {
     {"verbose", no_argument,       0, 'v'},
@@ -18,6 +19,7 @@ static const struct option g_long_opts[] = {
     {"usage",   no_argument,       0, '?'},
     {"preload", required_argument, 0, 'l'},
     {"timeout", required_argument, 0, 'w'},
+    {"count",   required_argument, 0, 'c'},
     {0,         0,                 0,  0 }
 };
 
@@ -26,6 +28,7 @@ void    print_usage(const char *prog)
     printf("Usage: %s [OPTION...] HOST ...\n", prog);
     printf("Send ICMP ECHO_REQUEST packets to network hosts.\n");
     printf("\n");
+    printf("  -c, --count=NUMBER         stop after sending NUMBER packets\n");
     printf("  -l, --preload=NUMBER       send NUMBER packets as fast as "
            "possible before\n");
     printf("                             falling into normal mode of "
@@ -48,6 +51,7 @@ void    parse_options(int argc, char **argv, t_opts *opts)
     char            *endptr;
     unsigned long   preload;
     unsigned long   timeout;
+    unsigned long   count;
 
     memset(opts, 0, sizeof(t_opts));
 
@@ -59,13 +63,36 @@ void    parse_options(int argc, char **argv, t_opts *opts)
     */
     opterr = 0;
 
-    while ((opt = getopt_long(argc, argv, "v?l:w:", g_long_opts,
+    while ((opt = getopt_long(argc, argv, "v?l:w:c:", g_long_opts,
                               &longindex)) != -1)
     {
         switch (opt)
         {
             case 'v':
                 opts->verbose = 1;
+                break ;
+
+            case 'c':
+                /*
+                ** Mirrors inetutils ping_cvt_number(arg, 0, 1): zero is
+                ** allowed (it means "no limit"); only trailing garbage is
+                ** rejected. We additionally cap at INT_MAX for our int field.
+                */
+                count = strtoul(optarg, &endptr, 0);
+                if (*endptr != '\0')
+                {
+                    fprintf(stderr,
+                        "ft_ping: invalid value (`%s' near `%s')\n",
+                        optarg, endptr);
+                    exit(EXIT_FAILURE);
+                }
+                if (count > INT_MAX)
+                {
+                    fprintf(stderr,
+                        "ft_ping: option value too big: %s\n", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                opts->count = (int)count;
                 break ;
 
             case 'l':
