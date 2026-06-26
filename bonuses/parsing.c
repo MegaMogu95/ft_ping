@@ -10,12 +10,14 @@
 **   --verbose       -> 'v'
 **   --help/--usage  -> '?'  (both map to the help screen, like inetutils)
 **   --preload=N     -> 'l'  (send N packets as fast as possible first)
+**   --timeout=N     -> 'w'  (stop after N seconds)
 */
 static const struct option g_long_opts[] = {
     {"verbose", no_argument,       0, 'v'},
     {"help",    no_argument,       0, '?'},
     {"usage",   no_argument,       0, '?'},
     {"preload", required_argument, 0, 'l'},
+    {"timeout", required_argument, 0, 'w'},
     {0,         0,                 0,  0 }
 };
 
@@ -28,6 +30,7 @@ void    print_usage(const char *prog)
            "possible before\n");
     printf("                             falling into normal mode of "
            "behavior\n");
+    printf("  -w, --timeout=N            stop after N seconds\n");
     printf("  -v, --verbose              verbose output\n");
     printf("  -?, --help                 give this help list\n");
     printf("\n");
@@ -44,6 +47,7 @@ void    parse_options(int argc, char **argv, t_opts *opts)
     int             longindex;
     char            *endptr;
     unsigned long   preload;
+    unsigned long   timeout;
 
     memset(opts, 0, sizeof(t_opts));
 
@@ -55,7 +59,8 @@ void    parse_options(int argc, char **argv, t_opts *opts)
     */
     opterr = 0;
 
-    while ((opt = getopt_long(argc, argv, "v?l:", g_long_opts, &longindex)) != -1)
+    while ((opt = getopt_long(argc, argv, "v?l:w:", g_long_opts,
+                              &longindex)) != -1)
     {
         switch (opt)
         {
@@ -76,6 +81,34 @@ void    parse_options(int argc, char **argv, t_opts *opts)
                     exit(EXIT_FAILURE);
                 }
                 opts->preload = (int)preload;
+                break ;
+
+            case 'w':
+                /*
+                ** Mirrors inetutils ping_cvt_number(arg, INT_MAX, 0):
+                ** reject trailing garbage, a zero value, and overflow.
+                */
+                timeout = strtoul(optarg, &endptr, 0);
+                if (*endptr != '\0')
+                {
+                    fprintf(stderr,
+                        "ft_ping: invalid value (`%s' near `%s')\n",
+                        optarg, endptr);
+                    exit(EXIT_FAILURE);
+                }
+                if (timeout == 0)
+                {
+                    fprintf(stderr,
+                        "ft_ping: option value too small: %s\n", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                if (timeout > INT_MAX)
+                {
+                    fprintf(stderr,
+                        "ft_ping: option value too big: %s\n", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                opts->timeout = (int)timeout;
                 break ;
 
             case '?':

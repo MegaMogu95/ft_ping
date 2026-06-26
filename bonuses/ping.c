@@ -2,10 +2,12 @@
 #include "icmp.h"
 #include "in_checksum.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/ip.h>
@@ -53,9 +55,17 @@ static void	setup_signals(void)
 
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = handle_sigint;
-	sigaction(SIGINT, &sa, NULL);
+	if (sigaction(SIGINT, &sa, NULL) == -1)
+	{
+		fprintf(stderr, "ft_ping: sigaction SIGINT: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 	sa.sa_handler = handle_sigalrm;
-	sigaction(SIGALRM, &sa, NULL);
+	if (sigaction(SIGALRM, &sa, NULL) == -1)
+	{
+		fprintf(stderr, "ft_ping: sigaction SIGALRM: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 }
 
 static int	seq_seen(uint16_t seq)
@@ -185,12 +195,44 @@ static void	print_stats(const char *target)
 			g_rtt_min, g_rtt_sum / g_rtt_count, g_rtt_max);
 }
 
+/*
+** setup_timeout: arm a one-shot POSIX timer that delivers SIGINT after
+** `timeout` seconds (the -w option). SIGINT is reused on purpose: its handler
+** already clears g_running, so the loop stops and the statistics are printed,
+** exactly as if the user had pressed Ctrl-C. A timeout of 0 means "no limit".
+*/
+static void	setup_timeout(int timeout)
+{
+	timer_t				timerid;
+	struct sigevent		sev;
+	struct itimerspec	its;
+
+	if (timeout == 0)
+		return ;
+	memset(&sev, 0, sizeof(sev));
+	sev.sigev_notify = SIGEV_SIGNAL;
+	sev.sigev_signo = SIGINT;
+	if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1)
+	{
+		fprintf(stderr, "ft_ping: timer_create: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	memset(&its, 0, sizeof(its));
+	its.it_value.tv_sec = timeout;
+	if (timer_settime(timerid, 0, &its, NULL) == -1)
+	{
+		fprintf(stderr, "ft_ping: timer_settime: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+}
+
 void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 {
 	char	buf[1024];
 	ssize_t	len;
 
 	setup_signals();
+	setup_timeout(opts->timeout);
 	for (int i = 0; i < opts->preload; i++)
 		send_packet(sockfd);
 	send_packet(sockfd);

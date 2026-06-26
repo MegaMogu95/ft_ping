@@ -7,6 +7,7 @@ typedef struct s_opts
 {
     int     verbose;
     int     preload;
+    int     timeout;
     char    *target;
 }   t_opts;
 

@@ -19,6 +19,14 @@ SRCS    =	main.c			\
 
 OBJS    = $(SRCS:%.c=$(OBJ_DIR)/%.o)
 
+# ── bonus build ──────────────────────────────────────────────────────
+BONUS_NAME    = ft_ping_bonus
+BONUS_DIR     = bonuses
+BONUS_INC     = $(BONUS_DIR)/includes
+BONUS_OBJ_DIR = obj_bonus
+BONUS_SRCS    = $(SRCS)
+BONUS_OBJS    = $(BONUS_SRCS:%.c=$(BONUS_OBJ_DIR)/%.o)
+
 # ── parsing unit test ───────────────────────────────────────────────
 TEST_DIR     = $(SRC_DIR)/test
 PARSING_BIN  = $(TEST_DIR)/test_parsing
@@ -41,13 +49,27 @@ parsing: $(PARSING_BIN)
 $(PARSING_BIN): $(PARSING_SRCS) $(INC_DIR)/parsing.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $(PARSING_BIN) $(PARSING_SRCS)
 
+# Build the bonus binary from the bonuses/ source tree.
+bonus: $(BONUS_NAME)
+
+$(BONUS_NAME): $(BONUS_OBJS)
+	$(CC) $(CFLAGS) -o $(BONUS_NAME) $(BONUS_OBJS) $(LDFLAGS)
+
+$(BONUS_OBJ_DIR)/%.o: $(BONUS_DIR)/%.c | $(BONUS_OBJ_DIR)
+	$(CC) $(CFLAGS) -I $(BONUS_INC) -c $< -o $@
+
+$(BONUS_OBJ_DIR):
+	mkdir -p $(BONUS_OBJ_DIR)
+
 clean:
 	rm -rf $(OBJ_DIR)
+	rm -rf $(BONUS_OBJ_DIR)
 
 fclean: clean
 	rm -f $(NAME)
+	rm -f $(BONUS_NAME)
 	rm -f $(PARSING_BIN)
 
 re: fclean all
 
-.PHONY: all parsing clean fclean re
+.PHONY: all bonus parsing clean fclean re

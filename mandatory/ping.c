@@ -2,6 +2,7 @@
 #include "icmp.h"
 #include "in_checksum.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -53,9 +54,17 @@ static void	setup_signals(void)
 
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = handle_sigint;
-	sigaction(SIGINT, &sa, NULL);
+	if (sigaction(SIGINT, &sa, NULL) == -1)
+	{
+		fprintf(stderr, "ft_ping: sigaction SIGINT: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 	sa.sa_handler = handle_sigalrm;
-	sigaction(SIGALRM, &sa, NULL);
+	if (sigaction(SIGALRM, &sa, NULL) == -1)
+	{
+		fprintf(stderr, "ft_ping: sigaction SIGALRM: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 }
 
 static int	seq_seen(uint16_t seq)
