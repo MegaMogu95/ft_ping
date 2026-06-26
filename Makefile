@@ -14,7 +14,8 @@ SRCS    =	main.c			\
 			dns.c			\
 			socket.c		\
 			in_checksum.c	\
-			icmp.c
+			icmp.c			\
+			ping.c
 
 OBJS    = $(SRCS:%.c=$(OBJ_DIR)/%.o)
 

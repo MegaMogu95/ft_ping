@@ -11,12 +11,13 @@
 ** building the ICMP message itself; the kernel still prepends the IP header
 ** on send. Requires CAP_NET_RAW (root or a setuid binary).
 **
-**   ttl         : value for the outgoing IP TTL (e.g. DEFAULT_TTL)
-**   timeout_sec : SO_RCVTIMEO in seconds; a recvfrom() that blocks this long
-**                 returns -1 with errno == EAGAIN/EWOULDBLOCK
+**   ttl : value for the outgoing IP TTL (e.g. DEFAULT_TTL)
+**
+** The socket is left blocking with no receive timeout, so recv() blocks until
+** a packet arrives or a signal interrupts it (EINTR).
 **
 ** Returns the socket fd on success, or -1 on failure (after printing why).
 */
-int create_socket(int ttl, int timeout_sec);
+int create_socket(int ttl);
 
 #endif
