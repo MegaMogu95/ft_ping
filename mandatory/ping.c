@@ -23,6 +23,8 @@ static uint16_t			g_seq = 0;
 static uint8_t			g_seen[65536 / 8];
 static int				g_transmitted = 0;
 static int				g_received = 0;
+static int				g_duplicates = 0;
+static int				g_rtt_count = 0;
 static double			g_rtt_min = 0;
 static double			g_rtt_max = 0;
 static double			g_rtt_sum = 0;
@@ -66,10 +68,22 @@ static void	seq_mark(uint16_t seq)
 	g_seen[seq >> 3] |= (uint8_t)(1 << (seq & 7));
 }
 
+static void	seq_clear(uint16_t seq)
+{
+	g_seen[seq >> 3] &= (uint8_t)~(1 << (seq & 7));
+}
+
 static void	send_packet(int sockfd)
 {
 	char	packet[ICMP_PKTLEN];
 
+	/*
+	** Clear the seen-bit for the sequence we are about to send, like
+	** inetutils' _PING_CLR. A stale or forged reply for this sequence is
+	** thus forgotten, so the genuine reply is counted fresh rather than as
+	** a duplicate.
+	*/
+	seq_clear(g_seq);
 	build_icmp_packet(packet, g_seq);
 	if (send(sockfd, packet, ICMP_PKTLEN, 0) >= 0)
 		g_transmitted++;
@@ -96,10 +110,11 @@ static void	report(const char *buf, ssize_t len, const char *ip)
 	uint16_t				seq;
 	double					rtt;
 	int						dup;
+	int						timing;
 
 	iph = (const struct iphdr *)buf;
 	iphlen = (size_t)iph->ihl * 4;
-	if ((size_t)len < iphlen + ICMP_HDRLEN + sizeof(struct timeval))
+	if ((size_t)len < iphlen + ICMP_HDRLEN)
 		return ;
 	icmp = (const struct icmphdr *)(buf + iphlen);
 	if (icmp->type != ICMP_ECHOREPLY
@@ -107,43 +122,67 @@ static void	report(const char *buf, ssize_t len, const char *ip)
 		return ;
 	icmplen = (size_t)len - iphlen;
 	seq = ntohs(icmp->un.echo.sequence);
-	recv_tv = (const struct timeval *)(buf + iphlen + ICMP_HDRLEN);
 	if (in_checksum(icmp, icmplen) != 0)
 		fprintf(stderr, "checksum mismatch from %s\n", ip);
 	dup = seq_seen(seq);
-	gettimeofday(&now, NULL);
-	rtt = (now.tv_sec - recv_tv->tv_sec) * 1000.0
-		+ (now.tv_usec - recv_tv->tv_usec) / 1000.0;
-	printf("%zu bytes from %s: icmp_seq=%u ttl=%d time=%.3f ms",
-		icmplen, ip, seq, iph->ttl, rtt);
+	/*
+	** A reply is only timed when its payload is large enough to hold the
+	** send timestamp. Smaller packets are still reported, just without the
+	** RTT (matching inetutils' PING_TIMING check).
+	*/
+	rtt = 0;
+	timing = (icmplen >= ICMP_HDRLEN + sizeof(struct timeval));
+	if (timing)
+	{
+		recv_tv = (const struct timeval *)(buf + iphlen + ICMP_HDRLEN);
+		gettimeofday(&now, NULL);
+		rtt = (now.tv_sec - recv_tv->tv_sec) * 1000.0
+			+ (now.tv_usec - recv_tv->tv_usec) / 1000.0;
+	}
+	printf("%zu bytes from %s: icmp_seq=%u ttl=%d",
+		icmplen, ip, seq, iph->ttl);
+	if (timing)
+		printf(" time=%.3f ms", rtt);
 	if (dup)
 		printf(" (DUP!)");
 	printf("\n");
-	if (!dup)
+	if (dup)
+		g_duplicates++;
+	else
 	{
 		seq_mark(seq);
 		g_received++;
-		if (g_received == 1 || rtt < g_rtt_min)
+	}
+	if (timing)
+	{
+		if (g_rtt_count == 0 || rtt < g_rtt_min)
 			g_rtt_min = rtt;
 		if (rtt > g_rtt_max)
 			g_rtt_max = rtt;
 		g_rtt_sum += rtt;
+		g_rtt_count++;
 	}
 }
 
 static void	print_stats(const char *target)
 {
-	int	loss;
-
-	loss = 0;
+	printf("--- %s ping statistics ---\n", target);
+	printf("%d packets transmitted, %d packets received, ",
+		g_transmitted, g_received);
+	if (g_duplicates > 0)
+		printf("+%d duplicates, ", g_duplicates);
 	if (g_transmitted > 0)
-		loss = (g_transmitted - g_received) * 100 / g_transmitted;
-	printf("\n--- %s ping statistics ---\n", target);
-	printf("%d packets transmitted, %d received, %d%% packet loss\n",
-		g_transmitted, g_received, loss);
-	if (g_received > 0)
+	{
+		if (g_received > g_transmitted)
+			printf("-- somebody is printing forged packets!");
+		else
+			printf("%d%% packet loss",
+				(g_transmitted - g_received) * 100 / g_transmitted);
+	}
+	printf("\n");
+	if (g_rtt_count > 0)
 		printf("round-trip min/avg/max = %.3f/%.3f/%.3f ms\n",
-			g_rtt_min, g_rtt_sum / g_received, g_rtt_max);
+			g_rtt_min, g_rtt_sum / g_rtt_count, g_rtt_max);
 }
 
 void	run_ping(int sockfd, const t_opts *opts, const char *ip)
