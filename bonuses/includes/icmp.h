@@ -14,6 +14,7 @@
 # define ICMP_DATALEN 56
 # define ICMP_PKTLEN  (ICMP_HDRLEN + ICMP_DATALEN)
 
-void	build_icmp_packet(char *packet, uint16_t seq);
+void	build_icmp_packet(char *packet, uint16_t seq,
+			const unsigned char *pattern, int pattern_len);
 
 #endif

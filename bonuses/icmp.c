@@ -13,10 +13,12 @@
 ** payload so it is echoed back for the RTT computation. The checksum is
 ** computed last, over the whole message, with the checksum field at 0.
 */
-void	build_icmp_packet(char *packet, uint16_t seq)
+void	build_icmp_packet(char *packet, uint16_t seq,
+		const unsigned char *pattern, int pattern_len)
 {
 	struct icmphdr	*icmp;
 	struct timeval	*timestamp;
+	size_t			start;
 	size_t			i;
 
 	memset(packet, 0, ICMP_PKTLEN);
@@ -31,15 +33,19 @@ void	build_icmp_packet(char *packet, uint16_t seq)
 	gettimeofday(timestamp, NULL);
 
 	/*
-	** Fill the payload after the timestamp with an incrementing byte
-	** pattern (0, 1, 2, ...), like inetutils ping's data_buffer[i] = i.
-	** The checksum below then covers this data, so any corruption of the
-	** payload is caught by recomputing the checksum on receipt.
+	** Fill the payload after the timestamp. With -p, repeat the given hex
+	** pattern (like inetutils' init_data_buffer); otherwise use the default
+	** incrementing 0, 1, 2, ... bytes. The checksum below covers this data,
+	** so payload corruption is caught by recomputing it on receipt.
 	*/
-	i = ICMP_HDRLEN + sizeof(struct timeval);
+	start = ICMP_HDRLEN + sizeof(struct timeval);
+	i = start;
 	while (i < ICMP_PKTLEN)
 	{
-		packet[i] = (char)(i - ICMP_HDRLEN - sizeof(struct timeval));
+		if (pattern_len > 0)
+			packet[i] = (char)pattern[(i - start) % (size_t)pattern_len];
+		else
+			packet[i] = (char)(i - start);
 		i++;
 	}
 

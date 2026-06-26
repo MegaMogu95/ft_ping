@@ -83,7 +83,7 @@ static void	seq_clear(uint16_t seq)
 	g_seen[seq >> 3] &= (uint8_t)~(1 << (seq & 7));
 }
 
-static void	send_packet(int sockfd)
+static void	send_packet(int sockfd, const t_opts *opts)
 {
 	char	packet[ICMP_PKTLEN];
 
@@ -94,7 +94,7 @@ static void	send_packet(int sockfd)
 	** a duplicate.
 	*/
 	seq_clear(g_seq);
-	build_icmp_packet(packet, g_seq);
+	build_icmp_packet(packet, g_seq, opts->pattern, opts->pattern_len);
 	if (send(sockfd, packet, ICMP_PKTLEN, 0) >= 0)
 		g_transmitted++;
 	g_seq++;
@@ -237,10 +237,10 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 	i = 0;
 	while (i < opts->preload)
 	{
-		send_packet(sockfd);
+		send_packet(sockfd, opts);
 		i++;
 	}
-	send_packet(sockfd);
+	send_packet(sockfd, opts);
 	alarm(1);
 	while (g_running)
 	{
@@ -253,7 +253,7 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 			** outstanding replies a one-second grace period, then exits.
 			*/
 			if (opts->count == 0 || g_transmitted < opts->count)
-				send_packet(sockfd);
+				send_packet(sockfd, opts);
 			else
 				break ;
 		}

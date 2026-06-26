@@ -18,6 +18,7 @@
 **   --preload=N     -> 'l'  (send N packets as fast as possible first)
 **   --timeout=N     -> 'w'  (stop after N seconds)
 **   --count=N       -> 'c'  (stop after sending N packets)
+**   --pattern=HEX   -> 'p'  (fill the packet with the given hex pattern)
 **   --ttl=N         -> OPT_TTL (long-only, specify N as time-to-live)
 */
 static const struct option g_long_opts[] = {
@@ -27,6 +28,7 @@ static const struct option g_long_opts[] = {
     {"preload", required_argument, 0, 'l'    },
     {"timeout", required_argument, 0, 'w'    },
     {"count",   required_argument, 0, 'c'    },
+    {"pattern", required_argument, 0, 'p'    },
     {"ttl",     required_argument, 0, OPT_TTL},
     {0,         0,                 0,  0      }
 };
@@ -37,6 +39,8 @@ void    print_usage(const char *prog)
     printf("Send ICMP ECHO_REQUEST packets to network hosts.\n");
     printf("\n");
     printf("  -c, --count=NUMBER         stop after sending NUMBER packets\n");
+    printf("  -p, --pattern=PATTERN      fill ICMP packet with given pattern "
+           "(hex)\n");
     printf("  -l, --preload=NUMBER       send NUMBER packets as fast as "
            "possible before\n");
     printf("                             falling into normal mode of "
@@ -73,7 +77,7 @@ void    parse_options(int argc, char **argv, t_opts *opts)
     */
     opterr = 0;
 
-    while ((opt = getopt_long(argc, argv, "v?l:w:c:", g_long_opts,
+    while ((opt = getopt_long(argc, argv, "v?l:w:c:p:", g_long_opts,
                               &longindex)) != -1)
     {
         switch (opt)
@@ -104,6 +108,34 @@ void    parse_options(int argc, char **argv, t_opts *opts)
                 }
                 opts->count = (int)count;
                 break ;
+
+            case 'p':
+            {
+                /*
+                ** Mirrors inetutils decode_pattern: read up to PATTERN_MAXLEN
+                ** hex bytes ("ff00a3"). sscanf("%2x%n") consumes one byte per
+                ** iteration; a non-hex token is a fatal error.
+                */
+                const char  *text = optarg;
+                int         byte;
+                int         off;
+                int         i = 0;
+
+                while (*text != '\0' && i < PATTERN_MAXLEN)
+                {
+                    if (sscanf(text, "%2x%n", &byte, &off) != 1)
+                    {
+                        fprintf(stderr,
+                            "ft_ping: error in pattern near %s\n", text);
+                        exit(EXIT_FAILURE);
+                    }
+                    opts->pattern[i] = (unsigned char)byte;
+                    text += off;
+                    i++;
+                }
+                opts->pattern_len = i;
+                break ;
+            }
 
             case 'l':
                 /*
