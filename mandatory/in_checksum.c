@@ -3,8 +3,8 @@
 
 uint16_t in_checksum(const void *data, size_t len)
 {
-        const uint16_t  *p;
-        uint32_t                sum;
+        const uint16_t	*p;
+        uint32_t		sum;
 
         p = data;
         sum = 0;

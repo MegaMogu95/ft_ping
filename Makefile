@@ -2,43 +2,46 @@ NAME    = ft_ping
 
 CC      = cc
 CFLAGS  = -Wall -Wextra -Werror
-INCLUDES= -I includes/
+
+SRC_DIR = mandatory
+OBJ_DIR = obj
+INC_DIR = $(SRC_DIR)/includes
+INCLUDES= -I $(INC_DIR)
 LDFLAGS = -lm
 
-SRCS    =	src/main.c		\
-            src/options.c	\
-            src/ping.c		\
-            src/icmp.c		\
-            src/utils.c
+SRCS    =	main.c			\
+			parsing.c		\
+			dns.c			\
+			socket.c		\
+			in_checksum.c	\
+			icmp.c
 
-OBJS    := $(SRCS:src/%.c=obj/%.o)
+OBJS    = $(SRCS:%.c=$(OBJ_DIR)/%.o)
 
 # ── parsing unit test ───────────────────────────────────────────────
-MAND_DIR     = mandatory
-MAND_INC     = $(MAND_DIR)/includes
-TEST_DIR     = $(MAND_DIR)/test
+TEST_DIR     = $(SRC_DIR)/test
 PARSING_BIN  = $(TEST_DIR)/test_parsing
-PARSING_SRCS = $(MAND_DIR)/parsing.c $(TEST_DIR)/test_parsing.c
+PARSING_SRCS = $(SRC_DIR)/parsing.c $(TEST_DIR)/test_parsing.c
 
 all: $(NAME)
-
-# Build and run the standalone parsing test harness.
-parsing: $(PARSING_BIN)
-
-$(PARSING_BIN): $(PARSING_SRCS) $(MAND_INC)/parsing.h
-	$(CC) $(CFLAGS) -I $(MAND_INC) -o $(PARSING_BIN) $(PARSING_SRCS)
 
 $(NAME): $(OBJS)
 	$(CC) $(CFLAGS) -o $(NAME) $(OBJS) $(LDFLAGS)
 
-obj/%.o: src/%.c | obj
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-obj:
-	mkdir -p obj
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+# Build the standalone parsing test harness.
+parsing: $(PARSING_BIN)
+
+$(PARSING_BIN): $(PARSING_SRCS) $(INC_DIR)/parsing.h
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(PARSING_BIN) $(PARSING_SRCS)
 
 clean:
-	rm -rf obj
+	rm -rf $(OBJ_DIR)
 
 fclean: clean
 	rm -f $(NAME)

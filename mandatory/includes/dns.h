@@ -12,11 +12,10 @@
 **   addr    : filled with the resolved AF_INET address (may be NULL)
 **   ip      : buffer to receive the printable dotted-decimal IP (may be NULL)
 **   ip_size : size of the ip buffer (use INET_ADDRSTRLEN)
-**
-** Returns 0 on success. On failure it prints "ft_ping: unknown host"
-** (matching the real ping) and returns -1.
+**   On failure it prints "ft_ping: unknown host"
+**   (matching the real ping) and exits with EXIT_FAILURE
 */
-int resolve_host(const char *host, struct sockaddr_in *addr,
+void    resolve_host(const char *host, struct sockaddr_in *addr,
                  char *ip, size_t ip_size);
 
 #endif

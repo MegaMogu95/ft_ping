@@ -3,6 +3,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <stdlib.h>
 #include "dns.h"
 
 /*
@@ -11,7 +12,7 @@
 ** what ping ultimately sends. getaddrinfo() also accepts a dotted-decimal
 ** string directly, so "127.0.0.1" works without a name server round-trip.
 */
-int resolve_host(const char *host, struct sockaddr_in *addr,
+void    resolve_host(const char *host, struct sockaddr_in *addr,
                  char *ip, size_t ip_size)
 {
     struct addrinfo     hints;
@@ -26,7 +27,7 @@ int resolve_host(const char *host, struct sockaddr_in *addr,
     if (getaddrinfo(host, NULL, &hints, &res) != 0 || res == NULL)
     {
         fprintf(stderr, "ft_ping: unknown host\n");
-        return (-1);
+        exit(EXIT_FAILURE);
     }
 
     sin = (struct sockaddr_in *)res->ai_addr;
@@ -36,5 +37,4 @@ int resolve_host(const char *host, struct sockaddr_in *addr,
         inet_ntop(AF_INET, &sin->sin_addr, ip, ip_size);
 
     freeaddrinfo(res);
-    return (0);
 }

@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <stdlib.h>
 #include "socket.h"
 
 /*
@@ -22,13 +23,13 @@ int create_socket(int ttl, int timeout_sec)
     if (sockfd < 0)
     {
         fprintf(stderr, "ft_ping: socket: %s\n", strerror(errno));
-        return (-1);
+        exit(EXIT_FAILURE);
     }
     if (setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
     {
         fprintf(stderr, "ft_ping: setsockopt IP_TTL: %s\n", strerror(errno));
         close(sockfd);
-        return (-1);
+        exit(EXIT_FAILURE);
     }
     tv.tv_sec  = timeout_sec;
     tv.tv_usec = 0;
@@ -37,7 +38,7 @@ int create_socket(int ttl, int timeout_sec)
         fprintf(stderr, "ft_ping: setsockopt SO_RCVTIMEO: %s\n",
             strerror(errno));
         close(sockfd);
-        return (-1);
+        exit(EXIT_FAILURE);
     }
     return (sockfd);
 }
