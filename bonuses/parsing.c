@@ -6,21 +6,29 @@
 #include "parsing.h"
 
 /*
+** --ttl has no short form. getopt_long returns this out-of-ASCII value for
+** it so it goes through the same switch as the short options.
+*/
+# define OPT_TTL 256
+
+/*
 ** Long options:
 **   --verbose       -> 'v'
 **   --help/--usage  -> '?'  (both map to the help screen, like inetutils)
 **   --preload=N     -> 'l'  (send N packets as fast as possible first)
 **   --timeout=N     -> 'w'  (stop after N seconds)
 **   --count=N       -> 'c'  (stop after sending N packets)
+**   --ttl=N         -> OPT_TTL (long-only, specify N as time-to-live)
 */
 static const struct option g_long_opts[] = {
-    {"verbose", no_argument,       0, 'v'},
-    {"help",    no_argument,       0, '?'},
-    {"usage",   no_argument,       0, '?'},
-    {"preload", required_argument, 0, 'l'},
-    {"timeout", required_argument, 0, 'w'},
-    {"count",   required_argument, 0, 'c'},
-    {0,         0,                 0,  0 }
+    {"verbose", no_argument,       0, 'v'    },
+    {"help",    no_argument,       0, '?'    },
+    {"usage",   no_argument,       0, '?'    },
+    {"preload", required_argument, 0, 'l'    },
+    {"timeout", required_argument, 0, 'w'    },
+    {"count",   required_argument, 0, 'c'    },
+    {"ttl",     required_argument, 0, OPT_TTL},
+    {0,         0,                 0,  0      }
 };
 
 void    print_usage(const char *prog)
@@ -34,6 +42,7 @@ void    print_usage(const char *prog)
     printf("                             falling into normal mode of "
            "behavior\n");
     printf("  -w, --timeout=N            stop after N seconds\n");
+    printf("      --ttl=N                specify N as time-to-live\n");
     printf("  -v, --verbose              verbose output\n");
     printf("  -?, --help                 give this help list\n");
     printf("\n");
@@ -52,6 +61,7 @@ void    parse_options(int argc, char **argv, t_opts *opts)
     unsigned long   preload;
     unsigned long   timeout;
     unsigned long   count;
+    unsigned long   ttl;
 
     memset(opts, 0, sizeof(t_opts));
 
@@ -136,6 +146,34 @@ void    parse_options(int argc, char **argv, t_opts *opts)
                     exit(EXIT_FAILURE);
                 }
                 opts->timeout = (int)timeout;
+                break ;
+
+            case OPT_TTL:
+                /*
+                ** Mirrors inetutils ping_cvt_number(arg, 255, 0): reject
+                ** trailing garbage, a zero value, and anything above 255.
+                */
+                ttl = strtoul(optarg, &endptr, 0);
+                if (*endptr != '\0')
+                {
+                    fprintf(stderr,
+                        "ft_ping: invalid value (`%s' near `%s')\n",
+                        optarg, endptr);
+                    exit(EXIT_FAILURE);
+                }
+                if (ttl == 0)
+                {
+                    fprintf(stderr,
+                        "ft_ping: option value too small: %s\n", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                if (ttl > 255)
+                {
+                    fprintf(stderr,
+                        "ft_ping: option value too big: %s\n", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                opts->ttl = (int)ttl;
                 break ;
 
             case '?':

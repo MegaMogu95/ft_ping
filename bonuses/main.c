@@ -18,7 +18,7 @@ int main(int argc, char **argv)
     char                ip[INET_ADDRSTRLEN];
 
     parse_options(argc, argv, &opts);
-    sockfd = create_socket(DEFAULT_TTL);
+    sockfd = create_socket(opts.ttl ? opts.ttl : DEFAULT_TTL);
     resolve_host(opts.target, &addr, ip, INET_ADDRSTRLEN);
     if (connect(sockfd, (const struct sockaddr *)&addr, sizeof(addr)) == -1)
     {

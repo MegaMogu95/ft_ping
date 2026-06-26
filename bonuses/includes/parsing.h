@@ -9,6 +9,7 @@ typedef struct s_opts
     int     preload;
     int     timeout;
     int     count;
+    int     ttl;
     char    *target;
 }   t_opts;
 
