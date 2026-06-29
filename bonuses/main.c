@@ -20,16 +20,11 @@ int main(int argc, char **argv)
     parse_options(argc, argv, &opts);
     sockfd = create_socket(opts.ttl ? opts.ttl : DEFAULT_TTL);
     resolve_host(opts.target, &addr, ip, INET_ADDRSTRLEN);
-    if (connect(sockfd, (const struct sockaddr *)&addr, sizeof(addr)) == -1)
-    {
-        fprintf(stderr, "ft_ping: connect: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
     printf("PING %s (%s): %d data bytes", opts.target, ip, ICMP_DATALEN);
     if (opts.verbose)
         printf(", id 0x%04x = %u", getpid() & 0xFFFF, getpid() & 0xFFFF);
     printf("\n");
-    run_ping(sockfd, &opts, ip);
+    run_ping(sockfd, &opts, ip, &addr);
     close(sockfd);
     return (0);
 }

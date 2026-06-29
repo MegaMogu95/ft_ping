@@ -83,7 +83,8 @@ static void	seq_clear(uint16_t seq)
 	g_seen[seq >> 3] &= (uint8_t)~(1 << (seq & 7));
 }
 
-static void	send_packet(int sockfd, const t_opts *opts)
+static void	send_packet(int sockfd, const t_opts *opts,
+		const struct sockaddr_in *addr)
 {
 	char	packet[ICMP_PKTLEN];
 
@@ -95,9 +96,124 @@ static void	send_packet(int sockfd, const t_opts *opts)
 	*/
 	seq_clear(g_seq);
 	build_icmp_packet(packet, g_seq, opts->pattern, opts->pattern_len);
-	if (send(sockfd, packet, ICMP_PKTLEN, 0) >= 0)
+	if (sendto(sockfd, packet, ICMP_PKTLEN, 0,
+			(const struct sockaddr *)addr, sizeof(*addr)) >= 0)
 		g_transmitted++;
 	g_seq++;
+}
+
+/*
+** pr_icmph: print the human-readable description of an ICMP error message,
+** terminated by a newline. Mirrors the wording of iputils/inetutils ping so
+** the output matches the real tool (e.g. "Time to live exceeded").
+*/
+static void	pr_icmph(const struct icmphdr *err)
+{
+	if (err->type == ICMP_DEST_UNREACH)
+	{
+		if (err->code == ICMP_NET_UNREACH)
+			printf("Destination Net Unreachable\n");
+		else if (err->code == ICMP_HOST_UNREACH)
+			printf("Destination Host Unreachable\n");
+		else if (err->code == ICMP_PROT_UNREACH)
+			printf("Destination Protocol Unreachable\n");
+		else if (err->code == ICMP_PORT_UNREACH)
+			printf("Destination Port Unreachable\n");
+		else if (err->code == ICMP_FRAG_NEEDED)
+			printf("Frag needed and DF set (mtu = %u)\n",
+				ntohs(err->un.frag.mtu));
+		else if (err->code == ICMP_SR_FAILED)
+			printf("Source Route Failed\n");
+		else if (err->code == ICMP_NET_UNKNOWN)
+			printf("Destination Net Unknown\n");
+		else if (err->code == ICMP_HOST_UNKNOWN)
+			printf("Destination Host Unknown\n");
+		else if (err->code == ICMP_HOST_ISOLATED)
+			printf("Source Host Isolated\n");
+		else if (err->code == ICMP_NET_ANO)
+			printf("Destination Net Prohibited\n");
+		else if (err->code == ICMP_HOST_ANO)
+			printf("Destination Host Prohibited\n");
+		else if (err->code == ICMP_NET_UNR_TOS)
+			printf("Destination Net Unreachable for Type of Service\n");
+		else if (err->code == ICMP_HOST_UNR_TOS)
+			printf("Destination Host Unreachable for Type of Service\n");
+		else if (err->code == ICMP_PKT_FILTERED)
+			printf("Packet filtered\n");
+		else if (err->code == ICMP_PREC_VIOLATION)
+			printf("Precedence Violation\n");
+		else if (err->code == ICMP_PREC_CUTOFF)
+			printf("Precedence Cutoff\n");
+		else
+			printf("Dest Unreachable, Bad Code: %d\n", err->code);
+	}
+	else if (err->type == ICMP_SOURCE_QUENCH)
+		printf("Source Quench\n");
+	else if (err->type == ICMP_REDIRECT)
+	{
+		if (err->code == ICMP_REDIR_NET)
+			printf("Redirect Network");
+		else if (err->code == ICMP_REDIR_HOST)
+			printf("Redirect Host");
+		else if (err->code == ICMP_REDIR_NETTOS)
+			printf("Redirect Type of Service and Network");
+		else if (err->code == ICMP_REDIR_HOSTTOS)
+			printf("Redirect Type of Service and Host");
+		else
+			printf("Redirect, Bad Code: %d", err->code);
+		printf("(New nexthop: %s)\n", inet_ntoa(*(struct in_addr *)&err->un.gateway));
+	}
+	else if (err->type == ICMP_TIME_EXCEEDED)
+	{
+		if (err->code == ICMP_EXC_TTL)
+			printf("Time to live exceeded\n");
+		else if (err->code == ICMP_EXC_FRAGTIME)
+			printf("Frag reassembly time exceeded\n");
+		else
+			printf("Time exceeded, Bad Code: %d\n", err->code);
+	}
+	else if (err->type == ICMP_PARAMETERPROB)
+		printf("Parameter problem: pointer = %u\n",
+			ntohl(err->un.gateway) >> 24);
+	else
+		printf("Unknown ICMP type %d\n", err->type);
+}
+
+/*
+** report_error: handle a received ICMP error message. The error carries, after
+** its own 8-byte header, the IP header + first 8 bytes of the datagram that
+** triggered it. We confirm that quoted datagram is one of our echo requests
+** (matching id), then print a line like the real ping:
+**   "From <router> icmp_seq=<seq> Time to live exceeded".
+** Errors are reported but not counted as received replies.
+*/
+static void	report_error(const char *buf, ssize_t len,
+		const struct iphdr *iph, size_t iphlen)
+{
+	const struct icmphdr	*err;
+	const struct iphdr		*oiph;
+	const struct icmphdr	*oicmp;
+	size_t					oiphlen;
+
+	err = (const struct icmphdr *)(buf + iphlen);
+	if (err->type != ICMP_DEST_UNREACH && err->type != ICMP_SOURCE_QUENCH
+		&& err->type != ICMP_REDIRECT && err->type != ICMP_TIME_EXCEEDED
+		&& err->type != ICMP_PARAMETERPROB)
+		return ;
+	if ((size_t)len < iphlen + ICMP_HDRLEN + sizeof(struct iphdr) + ICMP_HDRLEN)
+		return ;
+	oiph = (const struct iphdr *)(buf + iphlen + ICMP_HDRLEN);
+	oiphlen = (size_t)oiph->ihl * 4;
+	if ((size_t)len < iphlen + ICMP_HDRLEN + oiphlen + ICMP_HDRLEN)
+		return ;
+	oicmp = (const struct icmphdr *)((const char *)oiph + oiphlen);
+	if (oicmp->type != ICMP_ECHO
+		|| ntohs(oicmp->un.echo.id) != (getpid() & 0xFFFF))
+		return ;
+	printf("From %s icmp_seq=%u ",
+		inet_ntoa(*(struct in_addr *)&iph->saddr),
+		ntohs(oicmp->un.echo.sequence));
+	pr_icmph(err);
 }
 
 /*
@@ -127,8 +243,12 @@ static void	report(const char *buf, ssize_t len, const char *ip)
 	if ((size_t)len < iphlen + ICMP_HDRLEN)
 		return ;
 	icmp = (const struct icmphdr *)(buf + iphlen);
-	if (icmp->type != ICMP_ECHOREPLY
-		|| ntohs(icmp->un.echo.id) != (getpid() & 0xFFFF))
+	if (icmp->type != ICMP_ECHOREPLY)
+	{
+		report_error(buf, len, iph, iphlen);
+		return ;
+	}
+	if (ntohs(icmp->un.echo.id) != (getpid() & 0xFFFF))
 		return ;
 	icmplen = (size_t)len - iphlen;
 	seq = ntohs(icmp->un.echo.sequence);
@@ -226,7 +346,8 @@ static void	setup_timeout(int timeout)
 	}
 }
 
-void	run_ping(int sockfd, const t_opts *opts, const char *ip)
+void	run_ping(int sockfd, const t_opts *opts, const char *ip,
+		const struct sockaddr_in *addr)
 {
 	char	buf[1024];
 	ssize_t	len;
@@ -237,10 +358,10 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 	i = 0;
 	while (i < opts->preload)
 	{
-		send_packet(sockfd, opts);
+		send_packet(sockfd, opts, addr);
 		i++;
 	}
-	send_packet(sockfd, opts);
+	send_packet(sockfd, opts, addr);
 	alarm(1);
 	while (g_running)
 	{
@@ -253,7 +374,7 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip)
 			** outstanding replies a one-second grace period, then exits.
 			*/
 			if (opts->count == 0 || g_transmitted < opts->count)
-				send_packet(sockfd, opts);
+				send_packet(sockfd, opts, addr);
 			else
 				break ;
 		}
