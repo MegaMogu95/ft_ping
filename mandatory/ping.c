@@ -285,7 +285,7 @@ static void	print_stats(const char *target)
 	if (g_rtt_count > 0)
 		printf("round-trip min/avg/max/stddev = %.3f/%.3f/%.3f/%.3f ms\n", 
 			g_rtt_min, g_rtt_sum / g_rtt_count, g_rtt_max, 
-			sqrt(g_rtt_count * g_rtt_squared_sum - g_rtt_sum * g_rtt_sum) / g_rtt_count);
+			sqrt(fabs(g_rtt_count * g_rtt_squared_sum - g_rtt_sum * g_rtt_sum)) / g_rtt_count);
 }
 
 void	run_ping(int sockfd, const t_opts *opts, const char *ip,
