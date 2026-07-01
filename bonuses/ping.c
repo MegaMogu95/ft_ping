@@ -13,23 +13,21 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <arpa/inet.h>
+#include <math.h>
 
 static volatile sig_atomic_t	g_running = 1;
 static volatile sig_atomic_t	g_send = 0;
 
-/*
-** State shared between the loop and the report function. g_seen is a bitmap
-** of sequence numbers already reported (duplicate check).
-*/
-static uint16_t			g_seq = 0;
 static uint8_t			g_seen[65536 / 8];
-static int				g_transmitted = 0;
-static int				g_received = 0;
-static int				g_duplicates = 0;
-static int				g_rtt_count = 0;
-static double			g_rtt_min = 0;
-static double			g_rtt_max = 0;
-static double			g_rtt_sum = 0;
+static uint16_t			g_seq 				= 0;
+static int				g_transmitted 		= 0;
+static int				g_received 			= 0;
+static int				g_duplicates 		= 0;
+static int				g_rtt_count 		= 0;
+static double			g_rtt_min 			= 0;
+static double			g_rtt_max 			= 0;
+static double			g_rtt_sum 		 	= 0;
+static double			g_rtt_squared_sum	= 0;
 
 static void	handle_sigint(int sig)
 {
@@ -88,12 +86,6 @@ static void	send_packet(int sockfd, const t_opts *opts,
 {
 	char	packet[ICMP_PKTLEN];
 
-	/*
-	** Clear the seen-bit for the sequence we are about to send, like
-	** inetutils' _PING_CLR. A stale or forged reply for this sequence is
-	** thus forgotten, so the genuine reply is counted fresh rather than as
-	** a duplicate.
-	*/
 	seq_clear(g_seq);
 	build_icmp_packet(packet, g_seq, opts->pattern, opts->pattern_len);
 	if (sendto(sockfd, packet, ICMP_PKTLEN, 0,
@@ -179,14 +171,6 @@ static void	pr_icmph(const struct icmphdr *err)
 		printf("Unknown ICMP type %d\n", err->type);
 }
 
-/*
-** report_error: handle a received ICMP error message. The error carries, after
-** its own 8-byte header, the IP header + first 8 bytes of the datagram that
-** triggered it. We confirm that quoted datagram is one of our echo requests
-** (matching id), then print a line like the real ping:
-**   "From <router> icmp_seq=<seq> Time to live exceeded".
-** Errors are reported but not counted as received replies.
-*/
 static void	report_error(const char *buf, ssize_t len,
 		const struct iphdr *iph, size_t iphlen)
 {
@@ -216,15 +200,6 @@ static void	report_error(const char *buf, ssize_t len,
 	pr_icmph(err);
 }
 
-/*
-** report: validate one received datagram and print a ping line for it.
-** Skips packets that are not echo replies or not addressed to us. Damage is
-** detected the way inetutils does it: recomputing the ICMP checksum over the
-** whole message. Because the stored checksum is included in the sum, an
-** intact packet folds to 0; anything else means corruption, and a "checksum
-** mismatch" warning is printed (the reply is still shown and counted, as in
-** the real ping). Duplicates are detected via the already-seen bitmap.
-*/
 static void	report(const char *buf, ssize_t len, const char *ip)
 {
 	const struct iphdr		*iph;
@@ -255,11 +230,6 @@ static void	report(const char *buf, ssize_t len, const char *ip)
 	if (in_checksum(icmp, icmplen) != 0)
 		fprintf(stderr, "checksum mismatch from %s\n", ip);
 	dup = seq_seen(seq);
-	/*
-	** A reply is only timed when its payload is large enough to hold the
-	** send timestamp. Smaller packets are still reported, just without the
-	** RTT (matching inetutils' PING_TIMING check).
-	*/
 	rtt = 0;
 	timing = (icmplen >= ICMP_HDRLEN + sizeof(struct timeval));
 	if (timing)
@@ -290,6 +260,7 @@ static void	report(const char *buf, ssize_t len, const char *ip)
 		if (rtt > g_rtt_max)
 			g_rtt_max = rtt;
 		g_rtt_sum += rtt;
+		g_rtt_squared_sum += rtt * rtt;
 		g_rtt_count++;
 	}
 }
@@ -311,16 +282,11 @@ static void	print_stats(const char *target)
 	}
 	printf("\n");
 	if (g_rtt_count > 0)
-		printf("round-trip min/avg/max = %.3f/%.3f/%.3f ms\n",
-			g_rtt_min, g_rtt_sum / g_rtt_count, g_rtt_max);
+		printf("round-trip min/avg/max/stddev = %.3f/%.3f/%.3f/%.3f ms\n", 
+			g_rtt_min, g_rtt_sum / g_rtt_count, g_rtt_max, 
+			sqrt(g_rtt_count * g_rtt_squared_sum - g_rtt_sum * g_rtt_sum) / g_rtt_count);
 }
 
-/*
-** setup_timeout: arm a one-shot POSIX timer that delivers SIGINT after
-** `timeout` seconds (the -w option). SIGINT is reused on purpose: its handler
-** already clears g_running, so the loop stops and the statistics are printed,
-** exactly as if the user had pressed Ctrl-C. A timeout of 0 means "no limit".
-*/
 static void	setup_timeout(int timeout)
 {
 	timer_t				timerid;
@@ -368,11 +334,6 @@ void	run_ping(int sockfd, const t_opts *opts, const char *ip,
 		if (g_send)
 		{
 			g_send = 0;
-			/*
-			** Keep sending until we reach the requested count (0 = no
-			** limit). Once all packets are sent, the next alarm tick gives
-			** outstanding replies a one-second grace period, then exits.
-			*/
 			if (opts->count == 0 || g_transmitted < opts->count)
 				send_packet(sockfd, opts, addr);
 			else
