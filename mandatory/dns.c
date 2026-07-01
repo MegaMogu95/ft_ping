@@ -6,12 +6,6 @@
 #include <stdlib.h>
 #include "dns.h"
 
-/*
-** resolve_host: resolve a hostname (or a literal IPv4 string) into an
-** AF_INET address. We restrict the lookup to IPv4 / raw ICMP, which is
-** what ping ultimately sends. getaddrinfo() also accepts a dotted-decimal
-** string directly, so "127.0.0.1" works without a name server round-trip.
-*/
 void    resolve_host(const char *host, struct sockaddr_in *addr,
                  char *ip, size_t ip_size)
 {

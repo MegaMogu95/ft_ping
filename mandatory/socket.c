@@ -8,10 +8,6 @@
 #include <stdlib.h>
 #include "socket.h"
 
-/*
-** create_socket: raw ICMP socket used to send (and receive) echo packets.
-** We set IP_TTL on the outgoing packets.
-*/
 int create_socket(int ttl)
 {
     int             sockfd;

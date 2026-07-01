@@ -27,11 +27,6 @@ BONUS_OBJ_DIR = obj_bonus
 BONUS_SRCS    = $(SRCS)
 BONUS_OBJS    = $(BONUS_SRCS:%.c=$(BONUS_OBJ_DIR)/%.o)
 
-# ── parsing unit test ───────────────────────────────────────────────
-TEST_DIR     = $(SRC_DIR)/test
-PARSING_BIN  = $(TEST_DIR)/test_parsing
-PARSING_SRCS = $(SRC_DIR)/parsing.c $(TEST_DIR)/test_parsing.c
-
 all: $(NAME)
 
 $(NAME): $(OBJS)
@@ -42,12 +37,6 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
-
-# Build the standalone parsing test harness.
-parsing: $(PARSING_BIN)
-
-$(PARSING_BIN): $(PARSING_SRCS) $(INC_DIR)/parsing.h
-	$(CC) $(CFLAGS) $(INCLUDES) -o $(PARSING_BIN) $(PARSING_SRCS)
 
 # Build the bonus binary from the bonuses/ source tree.
 bonus: $(BONUS_NAME)
@@ -68,7 +57,6 @@ clean:
 fclean: clean
 	rm -f $(NAME)
 	rm -f $(BONUS_NAME)
-	rm -f $(PARSING_BIN)
 
 re: fclean all
 
